@@ -16,6 +16,7 @@
  */
 
 #include <GLES2/gl2.h>
+#include <GLES3/gl3.h>
 #include <EGL/egl.h>
 #include <cstdlib>
 #include <string>
@@ -142,6 +143,24 @@ void Video::renderFrame() {
     isDirty = false;
 
     glDisable(GL_DEPTH_TEST);
+
+    if (renderer->rendersInVideoCallback()) {
+        // Hardware cores (e.g. Flycast, via glsm) composite while their own GL
+        // state is still bound: a non-zero VAO, scissor/blend/cull/stencil, etc.
+        // In GLES3 the client-side vertex arrays we use below require the default
+        // VAO, so without this reset our draw is a silent no-op and the screen
+        // stays black even though the core rendered the frame correctly.
+        glBindVertexArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthMask(GL_TRUE);
+        glStencilMask(0xFF);
+        glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_BLEND);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_STENCIL_TEST);
+    }
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClearColor(0.0F, 0.0F, 0.0F, 1.0F);

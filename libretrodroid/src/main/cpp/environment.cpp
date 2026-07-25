@@ -265,6 +265,12 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             LOGD("Called RETRO_ENVIRONMENT_SET_HW_RENDER");
             return environment_handle_set_hw_render(static_cast<struct retro_hw_render_callback*>(data));
 
+        case RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT:
+            // Cores like Flycast request a persistent/shared HW context. Our single
+            // GLSurfaceView context is effectively shared, so acknowledge it.
+            LOGI("Called RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT");
+            return true;
+
         case RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE:
             LOGD("Called RETRO_ENVIRONMENT_GET_RUMBLE_INTERFACE");
             ((struct retro_rumble_interface*) data)->set_rumble_state = &callback_set_rumble_state;
@@ -336,7 +342,7 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             return environment_handle_get_microphone_interface(static_cast<struct retro_microphone_interface*>(data));
 
         default:
-            LOGD("callback environment has been called: %u", cmd);
+            LOGI("Unhandled environment call (returning false): %u", cmd);
             return false;
     }
 }

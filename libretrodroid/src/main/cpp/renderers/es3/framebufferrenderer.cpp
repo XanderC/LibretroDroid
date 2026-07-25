@@ -47,6 +47,7 @@ void FramebufferRenderer::onNewFrame(const void *data, unsigned width, unsigned 
 }
 
 void FramebufferRenderer::initializeBuffers() {
+    LOGI("[rfdiag] FramebufferRenderer::initializeBuffers %dx%d depth=%d stencil=%d", width, height, depth, stencil);
     framebuffers = ES3Utils::buildShaderPasses(width, height, shaders);
 
     ES3Utils::deleteFramebuffer(std::move(framebuffer));

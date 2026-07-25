@@ -18,6 +18,7 @@
 #include <jni.h>
 
 #include <EGL/egl.h>
+#include <GLES3/gl3.h>
 
 #include <string>
 #include <utility>
@@ -218,8 +219,22 @@ void LibretroDroid::onSurfaceCreated() {
 
     video = std::unique_ptr<Video>(newVideo);
 
+    LOGI("[rfdiag] onSurfaceCreated: hwAccel=%d fbo(base)=%dx%d max=%dx%d depth=%d stencil=%d bottomLeft=%d",
+         Environment::getInstance().isUseHwAcceleration(),
+         system_av_info.geometry.base_width,
+         system_av_info.geometry.base_height,
+         system_av_info.geometry.max_width,
+         system_av_info.geometry.max_height,
+         Environment::getInstance().isUseDepth(),
+         Environment::getInstance().isUseStencil(),
+         Environment::getInstance().isBottomLeftOrigin());
+
     if (Environment::getInstance().getHwContextReset() != nullptr) {
+        LOGI("[rfdiag] invoking core hw context_reset");
         Environment::getInstance().getHwContextReset()();
+        LOGI("[rfdiag] core hw context_reset returned");
+    } else {
+        LOGI("[rfdiag] no hw context_reset callback");
     }
 }
 
@@ -529,6 +544,22 @@ void LibretroDroid::handleVideoRefresh(
     unsigned int height,
     size_t pitch
 ) {
+    static int diagCount = 0;
+    bool doDiag = diagCount < 5 || (diagCount % 240 == 0);
+    if (doDiag && video) {
+        // flycast has just rendered this frame into the core FBO. Read back its
+        // centre pixel to tell "core rendered nothing" from "frontend loses it".
+        uintptr_t fbo = video->getCurrentFramebuffer();
+        unsigned char px[4] = {9, 9, 9, 9};
+        if (data == RETRO_HW_FRAME_BUFFER_VALID && width > 0 && height > 0) {
+            glBindFramebuffer(GL_FRAMEBUFFER, (GLuint) fbo);
+            glReadPixels(width / 2, height / 2, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, px);
+        }
+        LOGI("[rfdiag] video_refresh #%d: data=%p (hwValid=%d null=%d) %ux%u pitch=%zu fbo=%lu centre=%d,%d,%d,%d",
+             diagCount, data, data == RETRO_HW_FRAME_BUFFER_VALID, data == nullptr,
+             width, height, pitch, (unsigned long) fbo, px[0], px[1], px[2], px[3]);
+    }
+    diagCount++;
     if (video) {
         video->onNewFrame(data, width, height, pitch);
 
