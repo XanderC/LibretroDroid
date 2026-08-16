@@ -18,6 +18,8 @@
 #include "videolayout.h"
 #include "log.h"
 
+#include <algorithm>
+
 namespace libretrodroid {
 
 VideoLayout::VideoLayout(bool bottomLeftOrigin, float rotation, Rect viewportRect, unsigned int viewportAlignment) :
@@ -103,6 +105,18 @@ void VideoLayout::updateForegroundVertices() {
         rotatedQuad[i][0] = finalX;
         rotatedQuad[i][1] = finalY;
     }
+
+    LOGI(
+        "[rfdiag] foreground quad: screen=%ux%u aspect=%.4f viewport=(%.3f,%.3f,%.3f,%.3f) "
+        "scale=(%.4f,%.4f) x=[%.3f,%.3f] y=[%.3f,%.3f]",
+        screenWidth, screenHeight, aspectRatio,
+        viewportRect.getX(), viewportRect.getY(), viewportRect.getWidth(), viewportRect.getHeight(),
+        scaleX, scaleY,
+        std::min({rotatedQuad[0][0], rotatedQuad[1][0], rotatedQuad[2][0], rotatedQuad[3][0]}),
+        std::max({rotatedQuad[0][0], rotatedQuad[1][0], rotatedQuad[2][0], rotatedQuad[3][0]}),
+        std::min({rotatedQuad[0][1], rotatedQuad[1][1], rotatedQuad[2][1], rotatedQuad[3][1]}),
+        std::max({rotatedQuad[0][1], rotatedQuad[1][1], rotatedQuad[2][1], rotatedQuad[3][1]})
+    );
 
     foregroundVertices[0] = rotatedQuad[0][0];
     foregroundVertices[1] = rotatedQuad[0][1];

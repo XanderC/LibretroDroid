@@ -237,11 +237,19 @@ float Video::getScreenDensity() {
 }
 
 float Video::getTextureWidth() {
-    return renderer->lastFrameSize.first;
+    auto pass = renderer->getPassData(0);
+    if (pass.width.has_value() && pass.width.value() > 0) {
+        return (float) pass.width.value();
+    }
+    return (float) renderer->lastFrameSize.first;
 }
 
 float Video::getTextureHeight() {
-    return renderer->lastFrameSize.second;
+    auto pass = renderer->getPassData(0);
+    if (pass.height.has_value() && pass.height.value() > 0) {
+        return (float) pass.height.value();
+    }
+    return (float) renderer->lastFrameSize.second;
 }
 
 void Video::onNewFrame(const void *data, unsigned width, unsigned height, size_t pitch) {

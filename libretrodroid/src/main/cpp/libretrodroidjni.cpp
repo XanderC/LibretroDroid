@@ -196,10 +196,15 @@ JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_seri
     jclass obj
 ) {
     try {
-        auto [data, size] = LibretroDroid::getInstance().serializeState();
+        // serializeState() hands over ownership of a new[] buffer. Nothing used to
+        // release it, so every save leaked a whole state — invisible for a cartridge
+        // core, but a Dolphin state is over 100 MB and a couple of saves are enough
+        // to take the process down.
+        auto [raw, size] = LibretroDroid::getInstance().serializeState();
+        std::unique_ptr<int8_t[]> data(raw);
 
         jbyteArray result = env->NewByteArray(size);
-        env->SetByteArrayRegion(result, 0, size, data);
+        env->SetByteArrayRegion(result, 0, size, data.get());
 
         return result;
 
@@ -267,10 +272,12 @@ JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_seri
     jclass obj
 ) {
     try {
-        auto [data, size] = LibretroDroid::getInstance().serializeSRAM();
+        // Same ownership transfer, same leak, as serializeState above.
+        auto [raw, size] = LibretroDroid::getInstance().serializeSRAM();
+        std::unique_ptr<int8_t[]> data(raw);
 
         jbyteArray result = env->NewByteArray(size);
-        env->SetByteArrayRegion(result, 0, size, (jbyte *) data);
+        env->SetByteArrayRegion(result, 0, size, (jbyte *) data.get());
 
         return result;
 

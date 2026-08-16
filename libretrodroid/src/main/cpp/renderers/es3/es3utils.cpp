@@ -29,6 +29,9 @@ std::unique_ptr<ES3Utils::Framebuffer> ES3Utils::createFramebuffer(
     bool includeDepth,
     bool includeStencil
 ) {
+    if (width == 0) width = 640;
+    if (height == 0) height = 480;
+
     auto result = std::make_unique<Framebuffer>();
     result->width = width;
     result->height = height;
@@ -68,8 +71,9 @@ std::unique_ptr<ES3Utils::Framebuffer> ES3Utils::createFramebuffer(
         );
     }
 
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-        LOGE("Error while creating framebuffer. Leaving!");
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        LOGE("Error while creating framebuffer (%dx%d status=0x%x). Leaving!", width, height, status);
         throw std::runtime_error("Cannot create framebuffer");
     }
 

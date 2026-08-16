@@ -71,6 +71,8 @@ void Environment::updateVariable(const std::string& key, const std::string& valu
     auto current = variables[key];
     current.key = key;
 
+    LOGI("[rfdiag] updateVariable: %s = %s (was '%s')", key.c_str(), value.c_str(), current.value.c_str());
+
     if (value != current.value) {
         current.value = value;
         variables[key] = current;
@@ -81,8 +83,6 @@ void Environment::updateVariable(const std::string& key, const std::string& valu
 bool Environment::environment_handle_set_variables(const struct retro_variable* received) {
     unsigned count = 0;
     while (received[count].key != nullptr) {
-        LOGD("Received variable %s: %s", received[count].key, received[count].value);
-
         std::string key(received[count].key);
         std::string description(received[count].value);
         std::string value(received[count].value);
@@ -100,7 +100,8 @@ bool Environment::environment_handle_set_variables(const struct retro_variable* 
         }
 
         variables[key] = currentVariable;
-        LOGD("Assigning variable %s: %s", currentVariable.key.c_str(), currentVariable.value.c_str());
+        LOGI("[rfdiag] SET_VARIABLES core option %s: default='%s' active='%s'",
+             currentVariable.key.c_str(), value.c_str(), currentVariable.value.c_str());
 
         count++;
     }
@@ -109,14 +110,15 @@ bool Environment::environment_handle_set_variables(const struct retro_variable* 
 }
 
 bool Environment::environment_handle_get_variable(struct retro_variable* requested) {
-    LOGD("Variable requested %s", requested->key);
     auto foundVariable = variables.find(std::string(requested->key));
 
     if (foundVariable == variables.end()) {
+        LOGI("[rfdiag] GET_VARIABLE '%s' -> NOT FOUND", requested->key);
         return false;
     }
 
     requested->value = foundVariable->second.value.c_str();
+    LOGI("[rfdiag] GET_VARIABLE '%s' -> '%s'", requested->key, requested->value);
     return true;
 }
 
@@ -435,7 +437,7 @@ const std::vector<struct Variable> Environment::getVariables() const {
     std::for_each(
         variables.begin(),
         variables.end(),
-        [&](std::pair<std::string, struct Variable> item) {
+        [&](const std::pair<std::string, struct Variable> &item) {
             result.push_back(item.second);
         }
     );
@@ -443,7 +445,7 @@ const std::vector<struct Variable> Environment::getVariables() const {
     std::sort(
         result.begin(),
         result.end(),
-        [](struct Variable v1, struct Variable v2) {
+        [](const struct Variable &v1, const struct Variable &v2) {
             return v1.key < v2.key;
         }
     );

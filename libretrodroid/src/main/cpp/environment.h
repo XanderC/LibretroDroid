@@ -32,6 +32,29 @@
 #include "log.h"
 #include "rumblestate.h"
 
+struct Variable {
+    std::string key;
+    std::string value;
+    std::string description;
+
+    Variable() = default;
+    Variable(const Variable&) = default;
+    Variable(Variable&&) noexcept = default;
+    Variable& operator=(const Variable&) = default;
+    Variable& operator=(Variable&&) noexcept = default;
+};
+
+struct Controller {
+    unsigned id = 0;
+    std::string description;
+
+    Controller() = default;
+    Controller(const Controller&) = default;
+    Controller(Controller&&) noexcept = default;
+    Controller& operator=(const Controller&) = default;
+    Controller& operator=(Controller&&) noexcept = default;
+};
+
 class Environment {
 public:
     static Environment& getInstance()
@@ -108,6 +131,35 @@ public:
 
     const std::vector<std::vector<struct Controller>> &getControllers() const;
 
+    /** Diagnostics only: somewhere writable to drop a framebuffer dump. */
+    const std::string &getSavesDirectory() const { return savesDirectory; }
+
+    std::string getVariableValue(const std::string &key) const {
+        auto it = variables.find(key);
+        if (it != variables.end()) {
+            return it->second.value;
+        }
+        return "";
+    }
+
+    bool isDolphinCore() const {
+        return variables.find("dolphin_efb_scale") != variables.end();
+    }
+
+    unsigned int getDolphinScaleMultiplier() const {
+        auto itDolphin = variables.find("dolphin_efb_scale");
+        if (itDolphin != variables.end()) {
+            const std::string &val = itDolphin->second.value;
+            if (val == "6" || val.rfind("6x", 0) == 0 || val.rfind("x6", 0) == 0) return 6;
+            if (val == "5" || val.rfind("5x", 0) == 0 || val.rfind("x5", 0) == 0) return 5;
+            if (val == "4" || val.rfind("4x", 0) == 0 || val.rfind("x4", 0) == 0) return 4;
+            if (val == "3" || val.rfind("3x", 0) == 0 || val.rfind("x3", 0) == 0) return 3;
+            if (val == "2" || val.rfind("2x", 0) == 0 || val.rfind("x2", 0) == 0) return 2;
+            if (val == "1" || val.rfind("1x", 0) == 0 || val.rfind("x1", 0) == 0) return 1;
+        }
+        return 1;
+    }
+
 private:
     bool environment_handle_set_variables(const struct retro_variable* received);
     bool environment_handle_get_variable(struct retro_variable* requested);
@@ -148,19 +200,6 @@ private:
     bool dirtyVariables = false;
 
     std::vector<std::vector<struct Controller>> controllers;
-};
-
-struct Variable {
-public:
-    std::string key;
-    std::string value;
-    std::string description;
-};
-
-struct Controller {
-public:
-    unsigned id;
-    std::string description;
 };
 
 #endif //LIBRETRODROID_ENVIRONMENT_H

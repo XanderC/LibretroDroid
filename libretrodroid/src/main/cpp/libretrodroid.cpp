@@ -20,6 +20,7 @@
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 
+#include <cstdio>
 #include <string>
 #include <utility>
 #include <vector>
@@ -195,10 +196,26 @@ void LibretroDroid::onSurfaceCreated() {
 
     video = nullptr;
 
+    unsigned int baseWidth = system_av_info.geometry.base_width;
+    unsigned int baseHeight = system_av_info.geometry.base_height;
+    if (baseWidth == 0 && system_av_info.geometry.max_width > 0) {
+        baseWidth = system_av_info.geometry.max_width;
+    }
+    if (baseHeight == 0 && system_av_info.geometry.max_height > 0) {
+        baseHeight = system_av_info.geometry.max_height;
+    }
+    if (baseWidth == 0) baseWidth = 640;
+    unsigned int scale = Environment::getInstance().isDolphinCore()
+        ? Environment::getInstance().getDolphinScaleMultiplier()
+        : 1;
+
+    baseWidth *= scale;
+    baseHeight *= scale;
+
     Video::RenderingOptions renderingOptions {
         Environment::getInstance().isUseHwAcceleration(),
-        system_av_info.geometry.base_width,
-        system_av_info.geometry.base_height,
+        baseWidth,
+        baseHeight,
         Environment::getInstance().isUseDepth(),
         Environment::getInstance().isUseStencil(),
         openglESVersion,
@@ -545,6 +562,27 @@ void LibretroDroid::handleVideoRefresh(
     size_t pitch
 ) {
     static int diagCount = 0;
+
+    // Whole-FBO snapshot. The centre-pixel probe below says the core drew *something*;
+    // this says *what*, which is the only way to tell a core that renders a bad frame
+    // from a frontend that displays a good one badly.
+    if (video && (diagCount == 300 || (diagCount > 0 && diagCount % 1800 == 0)) &&
+        data == RETRO_HW_FRAME_BUFFER_VALID && width > 0 && height > 0) {
+        std::vector<unsigned char> pixels((size_t) width * height * 4);
+        glBindFramebuffer(GL_FRAMEBUFFER, (GLuint) video->getCurrentFramebuffer());
+        glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        auto path = Environment::getInstance().getSavesDirectory() + "/rfdiag-fbo.raw";
+        if (FILE *f = fopen(path.c_str(), "wb")) {
+            unsigned int header[2] = { width, height };
+            fwrite(header, sizeof(header), 1, f);
+            fwrite(pixels.data(), pixels.size(), 1, f);
+            fclose(f);
+            LOGI("[rfdiag] wrote fbo dump %ux%u to %s", width, height, path.c_str());
+        } else {
+            LOGI("[rfdiag] could not open %s for the fbo dump", path.c_str());
+        }
+    }
+
     bool doDiag = diagCount < 5 || (diagCount % 240 == 0);
     if (doDiag && video) {
         // flycast has just rendered this frame into the core FBO. Read back its
