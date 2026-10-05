@@ -53,11 +53,16 @@ public:
     Core(const std::string& soCorePath);
     ~Core();
 
+    // Leaves the library loaded when this is destroyed. For a core whose game failed to load:
+    // its static destructors can run against state it never finished setting up, and crash.
+    void keepLoaded() { keepLibrary = true; }
+
 private:
     void open(const std::string& soCorePath);
     void close();
 
     void* libHandle = nullptr;
+    bool keepLibrary = false;
 };
 
 }

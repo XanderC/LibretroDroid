@@ -68,7 +68,7 @@ void Core::open(const std::string& soCorePath) {
 
 void Core::close() {
     if (libHandle) {
-        dlclose(libHandle);
+        if (!keepLibrary) dlclose(libHandle);
         libHandle = nullptr;
     }
 }

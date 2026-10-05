@@ -180,6 +180,7 @@ private:
     std::mutex coreLock;
 
     std::unique_ptr<Core> core;
+    bool gameLoaded = false;
     std::unique_ptr<Audio> audio;
     std::unique_ptr<Video> video;
     std::unique_ptr<FPSSync> fpsSync;

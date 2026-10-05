@@ -166,6 +166,14 @@ bool Environment::environment_handle_get_vfs_interface(struct retro_vfs_interfac
         return false;
     }
 
+    // The core states the version it needs; offering a lower one anyway hands it a table shorter
+    // than it reads, and its first call past the end jumps to whatever follows in memory.
+    if (vfsInterfaceInfo->required_interface_version > libretrodroid::VFS::SUPPORTED_VERSION) {
+        LOGE("Core requires VFS v%u, only v%d is supported",
+             vfsInterfaceInfo->required_interface_version, libretrodroid::VFS::SUPPORTED_VERSION);
+        return false;
+    }
+
     vfsInterfaceInfo->required_interface_version = libretrodroid::VFS::SUPPORTED_VERSION;
     vfsInterfaceInfo->iface = libretrodroid::VFS::getInterface();
     return true;

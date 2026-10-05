@@ -315,6 +315,7 @@ void LibretroDroid::create(
     frameSpeed = 1;
 
     core = std::make_unique<Core>(soFilePath);
+    gameLoaded = false;
 
     core->retro_set_video_refresh(&callback_hw_video_refresh);
     core->retro_set_environment(&Environment::callback_environment);
@@ -445,8 +446,15 @@ void LibretroDroid::destroy() {
         Environment::getInstance().getHwContextDestroy()();
     }
 
-    core->retro_unload_game();
-    core->retro_deinit();
+    // Unloading a game that never loaded, or deinitialising a core that failed part-way through
+    // loading one, is outside the libretro contract and crashes some cores (Dolphin among them).
+    if (gameLoaded) {
+        core->retro_unload_game();
+        core->retro_deinit();
+    } else {
+        core->keepLoaded();
+    }
+    gameLoaded = false;
 
     video = nullptr;
     core = nullptr;
@@ -671,6 +679,7 @@ void LibretroDroid::clearRequiresVideoRefresh() {
 }
 
 void LibretroDroid::afterGameLoad() {
+    gameLoaded = true;
     struct retro_system_av_info system_av_info {};
     core->retro_get_system_av_info(&system_av_info);
 

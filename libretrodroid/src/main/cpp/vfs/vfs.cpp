@@ -18,6 +18,8 @@
 #include "vfs.h"
 
 #include <unistd.h>
+#include <sys/stat.h>
+#include <climits>
 #include <optional>
 
 #include "vfs/vfs_implementation.h"
@@ -91,8 +93,64 @@ int64_t VFS::truncate(struct retro_vfs_file_handle* stream, int64_t length) {
     return retro_vfs_file_truncate_impl(stream, length);
 }
 
+// A virtual file must also answer stat as the file it stands for: cores check a path exists, and
+// read its size, before opening it. Everything else is the real filesystem.
+int VFS::stat(const char *path, int32_t *size) {
+    int64_t size64 = 0;
+    int flags = stat64(path, &size64);
+    if (size != nullptr) {
+        *size = size64 > INT32_MAX ? INT32_MAX : static_cast<int32_t>(size64);
+    }
+    return flags;
+}
+
+int VFS::stat64(const char *path, int64_t *size) {
+    LOGV("VFS Calling stat: %s", path);
+    VFSFile* virtualFile = VFS::getInstance().findVirtualFile(path);
+    struct ::stat info {};
+    // fstat, not lseek, for a virtual file: its position is shared with every stream open on it.
+    int result = virtualFile != nullptr ? ::fstat(virtualFile->getFD(), &info) : ::stat(path, &info);
+    if (result != 0) {
+        return 0;
+    }
+    if (size != nullptr) {
+        *size = info.st_size;
+    }
+    int flags = RETRO_VFS_STAT_IS_VALID;
+    if (S_ISDIR(info.st_mode)) flags |= RETRO_VFS_STAT_IS_DIRECTORY;
+    if (S_ISCHR(info.st_mode)) flags |= RETRO_VFS_STAT_IS_CHARACTER_SPECIAL;
+    return flags;
+}
+
+int VFS::mkdir(const char *dir) {
+    LOGV("VFS Calling mkdir: %s", dir);
+    return retro_vfs_mkdir_impl(dir);
+}
+
+struct retro_vfs_dir_handle* VFS::opendir(const char *dir, bool include_hidden) {
+    LOGV("VFS Calling opendir: %s", dir);
+    return retro_vfs_opendir_impl(dir, include_hidden);
+}
+
+bool VFS::readdir(struct retro_vfs_dir_handle *dirstream) {
+    return retro_vfs_readdir_impl(dirstream);
+}
+
+const char* VFS::direntGetName(struct retro_vfs_dir_handle *dirstream) {
+    return retro_vfs_dirent_get_name_impl(dirstream);
+}
+
+bool VFS::direntIsDir(struct retro_vfs_dir_handle *dirstream) {
+    return retro_vfs_dirent_is_dir_impl(dirstream);
+}
+
+int VFS::closedir(struct retro_vfs_dir_handle *dirstream) {
+    return retro_vfs_closedir_impl(dirstream);
+}
+
 retro_vfs_interface * VFS::getInterface() {
-    return new retro_vfs_interface {
+    // The v4 table starts with the v3 one, so a core asking for any version reads a prefix of it.
+    static retro_vfs_interface_v4 iface { retro_vfs_interface {
         /* Introduced in VFS API v1 */
         &VFS::path,
         &VFS::open,
@@ -107,8 +165,18 @@ retro_vfs_interface * VFS::getInterface() {
         &VFS::rename,
 
         /* Introduced in VFS API v2 */
-        &VFS::truncate
-    };
+        &VFS::truncate,
+
+        /* Introduced in VFS API v3 */
+        &VFS::stat,
+        &VFS::mkdir,
+        &VFS::opendir,
+        &VFS::readdir,
+        &VFS::direntGetName,
+        &VFS::direntIsDir,
+        &VFS::closedir
+    }, &VFS::stat64 };
+    return &iface.v3;
 }
 
 void VFS::initialize(std::vector<VFSFile> files) {

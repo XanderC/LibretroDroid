@@ -29,11 +29,19 @@
 #include <memory>
 #include <optional>
 
+// VFS API v4, newer than the bundled libretro.h: stat with a 64-bit size, for discs over 2 GB.
+typedef int (RETRO_CALLCONV *retro_vfs_stat_64_t)(const char *path, int64_t *size);
+
+struct retro_vfs_interface_v4 {
+    retro_vfs_interface v3;
+    retro_vfs_stat_64_t stat_64;
+};
+
 namespace libretrodroid {
 
 class VFS {
 public:
-    static const int SUPPORTED_VERSION = 2;
+    static const int SUPPORTED_VERSION = 4;
     static VFS& getInstance()
     {
         static VFS instance;
@@ -68,6 +76,15 @@ public:
     static int rename(const char *old_path, const char *new_path);
 
     static int64_t truncate(struct retro_vfs_file_handle *stream, int64_t length);
+
+    static int stat(const char *path, int32_t *size);
+    static int stat64(const char *path, int64_t *size);
+    static int mkdir(const char *dir);
+    static struct retro_vfs_dir_handle* opendir(const char *dir, bool include_hidden);
+    static bool readdir(struct retro_vfs_dir_handle *dirstream);
+    static const char* direntGetName(struct retro_vfs_dir_handle *dirstream);
+    static bool direntIsDir(struct retro_vfs_dir_handle *dirstream);
+    static int closedir(struct retro_vfs_dir_handle *dirstream);
 
 private:
     std::vector<VFSFile> virtualFiles;
