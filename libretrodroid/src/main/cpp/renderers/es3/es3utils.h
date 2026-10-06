@@ -57,6 +57,22 @@ public:
         bool includeStencil
     );
 
+    /**
+     * Resizes a framebuffer in place: new attachments at the new size, but the same framebuffer
+     * object. A hardware-rendered core may keep the name get_current_framebuffer gave it rather
+     * than ask every frame (YabaSanshiro does), and a framebuffer deleted and recreated under a new
+     * name leaves such a core drawing into a deleted one — every frame incomplete, a black screen.
+     */
+    static void resizeFramebuffer(
+        Framebuffer &data,
+        unsigned int width,
+        unsigned int height,
+        bool linear,
+        bool repeat,
+        bool includeDepth,
+        bool includeStencil
+    );
+
     static void deleteFramebuffer(std::unique_ptr<Framebuffer> data);
 };
 

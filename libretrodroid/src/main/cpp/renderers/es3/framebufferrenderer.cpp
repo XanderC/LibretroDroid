@@ -91,15 +91,23 @@ void FramebufferRenderer::initializeBuffers() {
          width, height, depth, stencil, framebuffer.get());
     framebuffers = ES3Utils::buildShaderPasses(width, height, shaders);
 
-    ES3Utils::deleteFramebuffer(std::move(framebuffer));
-    framebuffer = ES3Utils::createFramebuffer(
-        width,
-        height,
-        shaders.linearTexture,
-        false,
-        depth,
-        stencil
-    );
+    // Resized in place once it exists: a core may hold on to the name get_current_framebuffer
+    // returned (see ES3Utils::resizeFramebuffer), so the framebuffer object must outlive a resize.
+    // Only a real one, though: the constructor builds the first before a GL context is current,
+    // and that one's name is 0 — the default framebuffer — so it's replaced, not resized.
+    if (framebuffer != nullptr && framebuffer->framebuffer != 0 && glIsFramebuffer(framebuffer->framebuffer)) {
+        ES3Utils::resizeFramebuffer(*framebuffer, width, height, shaders.linearTexture, false, depth, stencil);
+    } else {
+        ES3Utils::deleteFramebuffer(std::move(framebuffer));
+        framebuffer = ES3Utils::createFramebuffer(
+            width,
+            height,
+            shaders.linearTexture,
+            false,
+            depth,
+            stencil
+        );
+    }
     LOGI("[rfdiag] FramebufferRenderer::initializeBuffers done. newFB id=%lu tex=%lu",
          (unsigned long) framebuffer->framebuffer, (unsigned long) framebuffer->texture);
 }

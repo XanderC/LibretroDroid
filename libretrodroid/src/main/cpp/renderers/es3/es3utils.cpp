@@ -84,6 +84,68 @@ std::unique_ptr<ES3Utils::Framebuffer> ES3Utils::createFramebuffer(
     return result;
 }
 
+void ES3Utils::resizeFramebuffer(
+    Framebuffer &data,
+    unsigned int width,
+    unsigned int height,
+    bool linear,
+    bool repeat,
+    bool includeDepth,
+    bool includeStencil
+) {
+    if (width == 0) width = 640;
+    if (height == 0) height = 480;
+    data.width = width;
+    data.height = height;
+
+    // The color texture is immutable storage (glTexStorage2D), so it can't be resized: a new one
+    // takes its place on the same framebuffer object.
+    glDeleteTextures(1, &data.texture);
+    glGenTextures(1, &data.texture);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, data.framebuffer);
+
+    glBindTexture(GL_TEXTURE_2D, data.texture);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, width, height);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, repeat ? GL_MIRRORED_REPEAT : GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, repeat ? GL_MIRRORED_REPEAT : GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, linear ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, linear ? GL_LINEAR : GL_NEAREST);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, data.texture, 0);
+
+    if (includeDepth) {
+        // A renderbuffer can simply be re-specified at the new size.
+        if (!data.depth.has_value()) {
+            unsigned int depthBuffer;
+            glGenRenderbuffers(1, &depthBuffer);
+            data.depth = depthBuffer;
+        }
+        glBindRenderbuffer(GL_RENDERBUFFER, data.depth.value());
+        glRenderbufferStorage(
+            GL_RENDERBUFFER,
+            includeStencil ? GL_DEPTH24_STENCIL8 : GL_DEPTH_COMPONENT16,
+            width,
+            height
+        );
+        glFramebufferRenderbuffer(
+            GL_FRAMEBUFFER,
+            includeStencil ? GL_DEPTH_STENCIL_ATTACHMENT : GL_DEPTH_ATTACHMENT,
+            GL_RENDERBUFFER,
+            data.depth.value()
+        );
+    }
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        LOGE("Error while resizing framebuffer (%dx%d status=0x%x). Leaving!", width, height, status);
+        throw std::runtime_error("Cannot resize framebuffer");
+    }
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindRenderbuffer(GL_RENDERBUFFER, 0);
+}
+
 void ES3Utils::deleteFramebuffer(std::unique_ptr<ES3Utils::Framebuffer> data) {
     if (data == nullptr) {
         return;
