@@ -112,6 +112,7 @@ class GLRetroView(
         )
         LibretroDroid.setRumbleEnabled(data.rumbleEventsEnabled)
         LibretroDroid.setViewportAlignment(data.viewportAlignment.value)
+        LibretroDroid.setRunAheadFrames(data.runAheadFrames)
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)

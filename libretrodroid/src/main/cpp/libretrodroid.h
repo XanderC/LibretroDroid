@@ -131,6 +131,8 @@ public:
 
     void setAudioEnabled(bool enabled);
 
+    void setRunAheadFrames(unsigned int frames);
+
     void setShaderConfig(ShaderManager::Config shaderConfig);
 
     void setViewportAlignment(unsigned int viewportAlignment);
@@ -157,7 +159,17 @@ protected:
     static void callback_retro_set_input_poll();
 
 private:
+    void runAheadFrame();
+    void setAudioVideoEnabled(bool video, bool audio);
+
     unsigned int frameSpeed = 1;
+    // Frames run ahead of the one played, to hide the game's own input lag; 0 is off.
+    unsigned int runAheadFrames = 0;
+    // Off for good once the core can't save its state, or renders through the GPU.
+    bool runAheadUnavailable = false;
+    bool suppressVideo = false;
+    bool suppressAudio = false;
+    std::vector<uint8_t> runAheadState;
     bool audioEnabled = true;
     bool preferLowLatencyAudio = false;
     bool rumbleEnabled = false;

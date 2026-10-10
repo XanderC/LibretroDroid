@@ -111,6 +111,7 @@ public:
 
     int getPixelFormat() const;
     bool isUseHwAcceleration() const;
+    void setAudioVideoEnable(unsigned bits) { audioVideoEnable = bits; }
     bool isUseDepth() const;
     bool isUseStencil() const;
     bool isBottomLeftOrigin() const;
@@ -182,6 +183,8 @@ private:
 
     int pixelFormat = RETRO_PIXEL_FORMAT_RGB565;
     bool useHWAcceleration = false;
+    // RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE's answer: bit 0 video, bit 1 audio.
+    unsigned audioVideoEnable = 3;
     bool useDepth = false;
     bool useStencil = false;
     bool bottomLeftOrigin = false;

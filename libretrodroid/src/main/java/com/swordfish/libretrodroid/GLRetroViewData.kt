@@ -33,6 +33,8 @@ class GLRetroViewData(context: Context) {
     var rumbleEventsEnabled: Boolean = true
     var preferLowLatencyAudio: Boolean = true
     var skipDuplicateFrames: Boolean = false
+    /** Frames to run ahead of the one shown, hiding the game's own input lag; 0 is off. */
+    var runAheadFrames: Int = 0
     var enableMicrophone: Boolean = false
     var immersiveMode: ImmersiveMode? = null
 }

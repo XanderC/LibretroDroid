@@ -496,8 +496,16 @@ void LibretroDroid::step() {
         frames = std::min(requestedFrames, 2u);
     }
 
-    for (size_t i = 0; i < frames * frameSpeed; i++)
-        core->retro_run();
+    size_t runs = frames * frameSpeed;
+    for (size_t i = 0; i < runs; i++) {
+        // Only the frame that ends up on screen is run ahead; frames caught up on, or fast
+        // forwarded through, are never seen, so nobody waits on their input.
+        if (runAheadFrames > 0 && !runAheadUnavailable && i == runs - 1) {
+            runAheadFrame();
+        } else {
+            core->retro_run();
+        }
+    }
 
     if (video && !video->rendersInVideoCallback()) {
         video->renderFrame();
@@ -556,6 +564,64 @@ void LibretroDroid::setAudioEnabled(bool enabled) {
     audioEnabled = enabled;
 }
 
+void LibretroDroid::setRunAheadFrames(unsigned int frames) {
+    runAheadFrames = std::min(frames, 4u);
+}
+
+void LibretroDroid::setAudioVideoEnabled(bool video, bool audio) {
+    suppressVideo = !video;
+    suppressAudio = !audio;
+    Environment::getInstance().setAudioVideoEnable((video ? 1u : 0u) | (audio ? 2u : 0u));
+}
+
+/**
+ * One frame, shown [runAheadFrames] frames early. A game reads the pad and answers it a frame or
+ * more later -- lag built into the game, which the hardware had too. Run-ahead plays the real
+ * frame (its sound is heard, its picture isn't), saves the state, runs on to the frame the input
+ * would show in [runAheadFrames] frames' time and shows that, then goes back to the saved state.
+ * It costs a save, a load and [runAheadFrames] extra frames of emulation every frame.
+ */
+void LibretroDroid::runAheadFrame() {
+    if (Environment::getInstance().isUseHwAcceleration()) {
+        // A GPU-rendered frame lives in the core's framebuffer, which a load doesn't put back.
+        LOGI("Run-ahead is off: the core renders through the GPU");
+        runAheadUnavailable = true;
+        core->retro_run();
+        return;
+    }
+
+    setAudioVideoEnabled(false, true);
+    core->retro_run();
+
+    size_t size = core->retro_serialize_size();
+    if (size == 0) {
+        LOGI("Run-ahead is off: the core can't save its state");
+        runAheadUnavailable = true;
+        setAudioVideoEnabled(true, true);
+        return;
+    }
+    if (runAheadState.size() < size) runAheadState.resize(size);
+    if (!core->retro_serialize(runAheadState.data(), size)) {
+        LOGI("Run-ahead is off: the core failed to save its state");
+        runAheadUnavailable = true;
+        setAudioVideoEnabled(true, true);
+        return;
+    }
+
+    setAudioVideoEnabled(false, false);
+    for (unsigned int i = 1; i < runAheadFrames; i++)
+        core->retro_run();
+
+    setAudioVideoEnabled(true, false);
+    core->retro_run();
+    setAudioVideoEnabled(true, true);
+
+    if (!core->retro_unserialize(runAheadState.data(), size)) {
+        LOGI("Run-ahead is off: the core failed to load its state");
+        runAheadUnavailable = true;
+    }
+}
+
 void LibretroDroid::setShaderConfig(ShaderManager::Config shaderConfig) {
     fragmentShaderConfig = std::move(shaderConfig);
     if (video) {
@@ -606,6 +672,8 @@ void LibretroDroid::handleVideoRefresh(
              width, height, pitch, (unsigned long) fbo, px[0], px[1], px[2], px[3]);
     }
     diagCount++;
+    // A run-ahead frame not meant to be seen.
+    if (suppressVideo) return;
     if (video) {
         video->onNewFrame(data, width, height, pitch);
 
@@ -616,7 +684,7 @@ void LibretroDroid::handleVideoRefresh(
 }
 
 size_t LibretroDroid::handleAudioCallback(const int16_t *data, size_t frames) {
-    if (audio && audioEnabled) {
+    if (audio && audioEnabled && !suppressAudio) {
         audio->write(data, frames);
     }
     return frames;

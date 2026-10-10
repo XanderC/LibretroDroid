@@ -336,7 +336,9 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
 
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
             LOGD("Called RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE");
-            return false;
+            // Run-ahead's hidden frames say so here, and a core that asks skips their work.
+            if (data) *((int*) data) = (int) audioVideoEnable;
+            return true;
 
         case RETRO_ENVIRONMENT_GET_LANGUAGE:
             LOGD("Called RETRO_ENVIRONMENT_GET_LANGUAGE");
