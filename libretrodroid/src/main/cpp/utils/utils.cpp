@@ -42,7 +42,10 @@ Utils::ReadResult Utils::readFileAsBytes(const int fileDescriptor) {
 
     char* bytes = new char[size];
     fread(bytes, sizeof(char), size, file);
-    close(fileDescriptor);
+    // fdopen gave the descriptor to the FILE, so it is closed through the FILE: closing the raw
+    // descriptor behind its back is a double close, which fdsan aborts the whole app over
+    // ("attempted to close file descriptor N ... owned by FILE*"), on every game loaded this way.
+    fclose(file);
     return ReadResult { size, bytes };
 }
 
