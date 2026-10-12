@@ -175,6 +175,16 @@ class GLRetroView(
         }
     }
 
+    /**
+     * Clears every cheat the core holds. Switching one cheat off is safest as a reset and the rest
+     * set again: some cores ignore retro_cheat_set's enabled flag and only forget a code on reset.
+     */
+    fun resetCheats(useEmulationThread: Boolean = true) {
+        runOnEmulationThread(useEmulationThread) {
+            LibretroDroid.resetCheat()
+        }
+    }
+
     fun unserializeState(data: ByteArray, useEmulationThread: Boolean = true): Boolean {
         return runOnEmulationThread(useEmulationThread) {
             LibretroDroid.unserializeState(data)
