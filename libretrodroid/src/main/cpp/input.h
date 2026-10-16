@@ -36,8 +36,12 @@ private:
         float joypadLeftYAxis = 0;
         float joypadRightXAxis = 0;
         float joypadRightYAxis = 0;
-        float pointerScreenXAxis = -1;
-        float pointerScreenYAxis = -1;
+        // Where the screen was last touched, 0..1 across the game picture. Kept after the touch
+        // ends: libretro's pointer reports the release at the last position, with only
+        // pointerPressed going false.
+        float pointerScreenXAxis = 0.5f;
+        float pointerScreenYAxis = 0.5f;
+        bool pointerPressed = false;
     };
 
 public:

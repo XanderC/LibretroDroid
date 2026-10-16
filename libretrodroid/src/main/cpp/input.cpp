@@ -109,11 +109,8 @@ int16_t Input::getInputState(unsigned port, unsigned device, unsigned index, uns
             }
 
             switch (id) {
-                case RETRO_DEVICE_ID_POINTER_PRESSED: {
-                    bool isXActive = pads[port].pointerScreenXAxis >= 0;
-                    bool isYActive = pads[port].pointerScreenYAxis >= 0;
-                    return (int16_t) (isXActive && isYActive ? 1 : 0);
-                }
+                case RETRO_DEVICE_ID_POINTER_PRESSED:
+                    return (int16_t) (pads[port].pointerPressed ? 1 : 0);
 
                 case RETRO_DEVICE_ID_POINTER_X:
                     return (int16_t) (2.0 * (pads[port].pointerScreenXAxis - 0.5f) * MAX_RANGE_MOTION);
@@ -209,8 +206,17 @@ void Input::onMotionEvent(int port, int motionSource, float xAxis, float yAxis) 
             break;
 
         case Input::MOTION_SOURCE_POINTER:
-            pads[port].pointerScreenXAxis = xAxis;
-            pads[port].pointerScreenYAxis = yAxis;
+            // A position off the picture means the touch ended (GLRetroView sends one on lift).
+            // The release keeps the last position rather than reporting the off-picture one: a
+            // core that compares where a tap ended with where it began (ScummVM, to tell a click
+            // from a drag) read the release as a jump across the screen and dropped every tap.
+            if (xAxis >= 0 && yAxis >= 0) {
+                pads[port].pointerScreenXAxis = xAxis;
+                pads[port].pointerScreenYAxis = yAxis;
+                pads[port].pointerPressed = true;
+            } else {
+                pads[port].pointerPressed = false;
+            }
             break;
     }
 }
