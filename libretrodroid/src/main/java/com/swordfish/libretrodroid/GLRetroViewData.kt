@@ -37,6 +37,8 @@ class GLRetroViewData(context: Context) {
     var runAheadFrames: Int = 0
     var enableMicrophone: Boolean = false
     var immersiveMode: ImmersiveMode? = null
+    /** Plays with RetroAchievements; null plays without. */
+    var achievements: AchievementsConfig? = null
 }
 
 enum class ViewportAlignment(val value: Int) {

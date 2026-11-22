@@ -139,6 +139,19 @@ public:
 
     void resetGlobalVariables();
 
+    // For achievements: the core's own memory, read without the core lock (the caller is inside a
+    // frame, or on the emulation thread between frames).
+    void* coreMemoryData(unsigned id);
+    size_t coreMemorySize(unsigned id);
+
+    /** The game as the core was given it, for hashing: its path (real or virtual) and, if the core was handed its bytes, those. */
+    struct GameSource {
+        std::string path;
+        const uint8_t* data = nullptr;
+        size_t size = 0;
+    };
+    GameSource getGameSource() const { return gameSource; }
+
     // Handle callbacks
     void handleVideoRefresh(const void *data, unsigned width, unsigned height, size_t pitch);
     size_t handleAudioCallback(const int16_t* data, size_t frames);
@@ -193,6 +206,7 @@ private:
 
     std::unique_ptr<Core> core;
     bool gameLoaded = false;
+    GameSource gameSource;
     std::unique_ptr<Audio> audio;
     std::unique_ptr<Video> video;
     std::unique_ptr<FPSSync> fpsSync;

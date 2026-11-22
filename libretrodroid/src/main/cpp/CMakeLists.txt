@@ -13,6 +13,20 @@ include_directories (${OBOE_DIR}/src)
 
 include_directories("libretro/libretro-common/include")
 
+# RetroAchievements (rcheevos, MIT). rc_client with hashing; rc_libretro maps a core's memory.
+include_directories("rcheevos/include")
+include_directories("rcheevos/src")
+file(GLOB RCHEEVOS_SOURCES
+        rcheevos/src/*.c
+        rcheevos/src/rapi/*.c
+        rcheevos/src/rcheevos/*.c
+        rcheevos/src/rhash/*.c
+)
+# The RAIntegration toolkit is Windows only.
+list(FILTER RCHEEVOS_SOURCES EXCLUDE REGEX ".*rc_client_raintegration\.c$")
+set_source_files_properties(${RCHEEVOS_SOURCES} PROPERTIES COMPILE_FLAGS "-Wno-unused-function -Wno-unused-variable")
+add_definitions("-DRC_CLIENT_SUPPORTS_HASH")
+
 set (LIBRETRO_COMMON
         libretro/libretro-common/vfs/vfs_implementation.c
         libretro/libretro-common/string/stdstring.c
@@ -86,7 +100,10 @@ add_library(libretrodroid SHARED
         microphone/microphone.cpp
         microphone/microphoneinterface.h
         microphone/microphoneinterface.cpp
+        achievements.h
+        achievements.cpp
         ${LIBRETRO_COMMON}
+        ${RCHEEVOS_SOURCES}
 )
 
 # Support 16k pages for Android 15

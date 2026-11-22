@@ -43,6 +43,7 @@
 #include "renderers/es2/imagerendereres2.h"
 #include "renderers/es3/imagerendereres3.h"
 #include "utils/jnistring.h"
+#include "achievements.h"
 
 namespace libretrodroid {
 
@@ -619,6 +620,100 @@ JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_refreshAsp
     jclass obj
 ) {
     LibretroDroid::getInstance().refreshAspectRatio();
+}
+
+// --- RetroAchievements -------------------------------------------------------------------------------
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsStart(
+    JNIEnv* env,
+    jclass obj,
+    jobject listener,
+    jboolean hardcore
+) {
+    Achievements::getInstance().start(env, listener, hardcore);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsLogin(
+    JNIEnv* env,
+    jclass obj,
+    jstring username,
+    jstring token
+) {
+    auto user = JniString(env, username);
+    auto userToken = JniString(env, token);
+    Achievements::getInstance().login(user.stdString(), userToken.stdString());
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsLoadGame(
+    JNIEnv* env,
+    jclass obj,
+    jint consoleId
+) {
+    auto source = LibretroDroid::getInstance().getGameSource();
+    Achievements::getInstance().loadGame((uint32_t) consoleId, source.path, source.data, source.size);
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsServerResponse(
+    JNIEnv* env,
+    jclass obj,
+    jlong requestId,
+    jint httpStatus,
+    jbyteArray body
+) {
+    std::string text;
+    if (body != nullptr) {
+        jsize length = env->GetArrayLength(body);
+        text.resize((size_t) length);
+        env->GetByteArrayRegion(body, 0, length, reinterpret_cast<jbyte*>(text.data()));
+    }
+    Achievements::getInstance().onServerResponse(requestId, httpStatus, text.c_str(), text.size());
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsSetHardcore(
+    JNIEnv* env,
+    jclass obj,
+    jboolean enabled
+) {
+    Achievements::getInstance().setHardcore(enabled);
+}
+
+JNIEXPORT jboolean JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsIsHardcoreActive(
+    JNIEnv* env,
+    jclass obj
+) {
+    return Achievements::getInstance().isHardcoreActive() ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsIdle(
+    JNIEnv* env,
+    jclass obj
+) {
+    Achievements::getInstance().idle();
+}
+
+JNIEXPORT jint JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsFramesUntilPause(
+    JNIEnv* env,
+    jclass obj
+) {
+    return (jint) Achievements::getInstance().framesUntilPause();
+}
+
+JNIEXPORT jstring JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsUserAgentClause(
+    JNIEnv* env,
+    jclass obj
+) {
+    return env->NewStringUTF(Achievements::getInstance().userAgentClause().c_str());
+}
+
+JNIEXPORT jbyteArray JNICALL Java_com_swordfish_libretrodroid_LibretroDroid_achievementsList(
+    JNIEnv* env,
+    jclass obj,
+    jint grouping
+) {
+    std::string json = Achievements::getInstance().listJson(grouping);
+    jbyteArray result = env->NewByteArray((jsize) json.size());
+    env->SetByteArrayRegion(result, 0, (jsize) json.size(), reinterpret_cast<const jbyte*>(json.data()));
+    return result;
 }
 
 }

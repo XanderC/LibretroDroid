@@ -27,6 +27,7 @@
 #include <EGL/egl.h>
 #include <unordered_map>
 #include <array>
+#include <deque>
 
 #include "../../libretro-common/include/libretro.h"
 #include "log.h"
@@ -132,6 +133,12 @@ public:
 
     const std::vector<std::vector<struct Controller>> &getControllers() const;
 
+    /**
+     * The memory map the core described with RETRO_ENVIRONMENT_SET_MEMORY_MAPS, or nullptr if it
+     * gave none. Achievements read the game's memory through it.
+     */
+    const struct retro_memory_map* getMemoryMap() const;
+
     /** Diagnostics only: somewhere writable to drop a framebuffer dump. */
     const std::string &getSavesDirectory() const { return savesDirectory; }
 
@@ -168,6 +175,7 @@ private:
     bool environment_handle_set_hw_render(struct retro_hw_render_callback* hw_render_callback);
     bool environment_handle_get_vfs_interface(struct retro_vfs_interface_info* vfs_interface_info);
     bool environment_handle_get_microphone_interface(struct retro_microphone_interface* microphone_interface);
+    bool environment_handle_set_memory_maps(const struct retro_memory_map* received);
 
 private:
     retro_hw_context_reset_t hw_context_reset = nullptr;
@@ -203,6 +211,13 @@ private:
     bool dirtyVariables = false;
 
     std::vector<std::vector<struct Controller>> controllers;
+
+    // A copy of the core's memory map: the core may free what it passed once the call returns.
+    // The address space names are kept in a deque, whose strings never move as it grows.
+    std::vector<struct retro_memory_descriptor> memoryDescriptors;
+    std::deque<std::string> memoryAddressSpaces;
+    struct retro_memory_map memoryMap {};
+    bool hasMemoryMap = false;
 };
 
 #endif //LIBRETRODROID_ENVIRONMENT_H

@@ -48,6 +48,11 @@ void Environment::deinitialize() {
 
     retro_disk_control_callback = nullptr;
 
+    memoryDescriptors.clear();
+    memoryAddressSpaces.clear();
+    memoryMap = {};
+    hasMemoryMap = false;
+
     savesDirectory = std::string();
     systemDirectory = std::string();
     language = RETRO_LANGUAGE_ENGLISH;
@@ -353,10 +358,41 @@ bool Environment::handle_callback_environment(unsigned cmd, void *data) {
             LOGD("Called RETRO_ENVIRONMENT_GET_MICROPHONE_INTERFACE");
             return environment_handle_get_microphone_interface(static_cast<struct retro_microphone_interface*>(data));
 
+        case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+            LOGD("Called RETRO_ENVIRONMENT_SET_MEMORY_MAPS");
+            return environment_handle_set_memory_maps(static_cast<const struct retro_memory_map*>(data));
+
+        case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
+            LOGD("Called RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS");
+            return true;
+
         default:
             LOGI("Unhandled environment call (returning false): %u", cmd);
             return false;
     }
+}
+
+bool Environment::environment_handle_set_memory_maps(const struct retro_memory_map* received) {
+    if (received == nullptr) return false;
+
+    memoryDescriptors.assign(received->descriptors, received->descriptors + received->num_descriptors);
+    memoryAddressSpaces.clear();
+    for (auto& descriptor : memoryDescriptors) {
+        if (descriptor.addrspace != nullptr) {
+            memoryAddressSpaces.emplace_back(descriptor.addrspace);
+            descriptor.addrspace = memoryAddressSpaces.back().c_str();
+        }
+    }
+    memoryMap.descriptors = memoryDescriptors.data();
+    memoryMap.num_descriptors = (unsigned) memoryDescriptors.size();
+    hasMemoryMap = true;
+
+    LOGI("Core described %u memory regions", memoryMap.num_descriptors);
+    return true;
+}
+
+const struct retro_memory_map* Environment::getMemoryMap() const {
+    return hasMemoryMap ? &memoryMap : nullptr;
 }
 
 void Environment::setLanguage(const std::string& androidLanguage) {

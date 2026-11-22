@@ -54,6 +54,12 @@ public:
     void initialize(std::vector<VFSFile> files);
     void deinitialize();
 
+    /**
+     * A new descriptor for the virtual file at [path], or -1 if there is none. It shares its
+     * position with the core's streams, so read it with pread only. The caller closes it.
+     */
+    int duplicateVirtualFD(const char* path);
+
 private:
     VFS() {}
 

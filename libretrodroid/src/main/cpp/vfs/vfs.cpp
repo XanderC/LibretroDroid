@@ -220,6 +220,11 @@ struct retro_vfs_file_handle* VFS::virtualOpen(const char *path, unsigned int mo
     return stream;
 }
 
+int VFS::duplicateVirtualFD(const char* path) {
+    VFSFile* virtualFile = findVirtualFile(path);
+    return virtualFile != nullptr ? dup(virtualFile->getFD()) : -1;
+}
+
 VFSFile* VFS::findVirtualFile(const char *path) {
     for (auto& virtualFile : virtualFiles) {
         if (strcmp(path, virtualFile.getFileName().data()) == 0) {

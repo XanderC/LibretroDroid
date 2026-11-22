@@ -142,4 +142,16 @@ public class LibretroDroid {
 
     public static native Controller[][] getControllers();
     public static native void setControllerType(int port, int type);
+
+    // RetroAchievements (see achievements.h). All on the emulation thread.
+    public static native void achievementsStart(AchievementsBridge listener, boolean hardcore);
+    public static native void achievementsLogin(String username, String token);
+    public static native void achievementsLoadGame(int consoleId);
+    public static native void achievementsServerResponse(long requestId, int httpStatus, byte[] body);
+    public static native void achievementsSetHardcore(boolean enabled);
+    public static native boolean achievementsIsHardcoreActive();
+    public static native void achievementsIdle();
+    public static native int achievementsFramesUntilPause();
+    public static native String achievementsUserAgentClause();
+    public static native byte[] achievementsList(int grouping);
 }

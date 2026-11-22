@@ -46,6 +46,7 @@
 #include "utils/rect.h"
 #include "errorcodes.h"
 #include "vfs/vfs.h"
+#include "achievements.h"
 
 namespace libretrodroid {
 
@@ -149,7 +150,9 @@ void LibretroDroid::setControllerType(unsigned int port, unsigned int type) {
 bool LibretroDroid::unserializeState(int8_t *data, size_t size) {
     std::lock_guard<std::mutex> lock(coreLock);
 
-    return core->retro_unserialize(data, size);
+    bool loaded = core->retro_unserialize(data, size);
+    if (loaded) Achievements::getInstance().onStateLoaded();
+    return loaded;
 }
 
 JNIEXPORT jboolean JNICALL LibretroDroid::unserializeSRAM(int8_t* data, size_t size) {
@@ -359,6 +362,8 @@ void LibretroDroid::loadGameFromPath(const std::string& gamePath) {
         game_info.data = file.data;
         game_info.size = file.size;
     }
+    // The bytes handed to the core are never freed, so they stay valid to hash from.
+    gameSource = GameSource { gamePath, (const uint8_t*) game_info.data, game_info.size };
 
     bool result = core->retro_load_game(&game_info);
     if (!result) {
@@ -386,6 +391,7 @@ void LibretroDroid::loadGameFromBytes(const int8_t *data, size_t size) {
         game_info.data = data;
         game_info.size = size;
     }
+    gameSource = GameSource { "", (const uint8_t*) data, size };
 
     bool result = core->retro_load_game(&game_info);
     if (!result) {
@@ -427,6 +433,7 @@ void LibretroDroid::loadGameFromVirtualFiles(std::vector<VFSFile> virtualFiles) 
         game_info.data = file.data;
         game_info.size = file.size;
     }
+    gameSource = GameSource { firstFilePath, (const uint8_t*) game_info.data, game_info.size };
 
     bool result = core->retro_load_game(&game_info);
     if (!result) {
@@ -441,6 +448,10 @@ void LibretroDroid::destroy() {
     std::lock_guard<std::mutex> lock(coreLock);
 
     LOGD("Performing libretrodroid destroy");
+
+    // Its memory regions point into the core.
+    Achievements::getInstance().stop();
+    gameSource = GameSource {};
 
     if (Environment::getInstance().getHwContextDestroy() != nullptr) {
         Environment::getInstance().getHwContextDestroy()();
@@ -496,7 +507,9 @@ void LibretroDroid::step() {
         frames = std::min(requestedFrames, 2u);
     }
 
-    size_t runs = frames * frameSpeed;
+    Achievements& achievements = Achievements::getInstance();
+    // No fast-forward in hardcore.
+    size_t runs = frames * (achievements.isHardcoreActive() ? 1 : frameSpeed);
     for (size_t i = 0; i < runs; i++) {
         // Only the frame that ends up on screen is run ahead; frames caught up on, or fast
         // forwarded through, are never seen, so nobody waits on their input.
@@ -505,6 +518,14 @@ void LibretroDroid::step() {
         } else {
             core->retro_run();
         }
+        // After a run-ahead frame the state is back to the real one, which is what is checked.
+        achievements.doFrame();
+    }
+
+    // Hardcore was turned on mid-game: it starts again from the beginning.
+    if (achievements.takeResetRequest()) {
+        core->retro_reset();
+        achievements.onGameReset();
     }
 
     if (video && !video->rendersInVideoCallback()) {
@@ -713,6 +734,7 @@ void LibretroDroid::reset() {
     std::lock_guard<std::mutex> lock(coreLock);
 
     core->retro_reset();
+    Achievements::getInstance().onGameReset();
 }
 
 std::pair<int8_t*, size_t> LibretroDroid::serializeState() {
@@ -734,6 +756,11 @@ void LibretroDroid::resetCheat() {
 
 void LibretroDroid::setCheat(unsigned index, bool enabled, const std::string& code) {
     std::lock_guard<std::mutex> lock(coreLock);
+
+    if (enabled && Achievements::getInstance().isHardcoreActive()) {
+        LOGI("Cheat %u refused: RetroAchievements hardcore is on", index);
+        return;
+    }
 
     core->retro_cheat_set(index, enabled, Utils::cloneToCString(code));
 }
@@ -779,6 +806,14 @@ void LibretroDroid::handleRumbleUpdates(const std::function<void(int, float, flo
     if (rumble && rumbleEnabled) {
         rumble->handleRumbleUpdates(handler);
     }
+}
+
+void* LibretroDroid::coreMemoryData(unsigned id) {
+    return core ? core->retro_get_memory_data(id) : nullptr;
+}
+
+size_t LibretroDroid::coreMemorySize(unsigned id) {
+    return core ? core->retro_get_memory_size(id) : 0;
 }
 
 void LibretroDroid::setViewport(Rect viewportRect) {

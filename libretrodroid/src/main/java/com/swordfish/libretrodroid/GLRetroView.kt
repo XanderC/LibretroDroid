@@ -35,8 +35,10 @@ import androidx.lifecycle.coroutineScope
 import com.swordfish.libretrodroid.KtUtils.awaitUninterruptibly
 import com.swordfish.libretrodroid.gamepad.GamepadsManager
 import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.Locale
 import java.util.concurrent.CountDownLatch
@@ -82,6 +84,10 @@ class GLRetroView(
 
     private val rumbleEventsSubject = MutableSharedFlow<RumbleEvent>()
 
+    // Emitted from the emulation thread without waiting; collect before the view is attached.
+    private val achievementsEventsSubject = MutableSharedFlow<AchievementsEvent>(extraBufferCapacity = 64)
+    @Volatile private var lastFrameAt = 0L
+
     private var lifecycle: Lifecycle? = null
 
     init {
@@ -113,6 +119,27 @@ class GLRetroView(
         LibretroDroid.setRumbleEnabled(data.rumbleEventsEnabled)
         LibretroDroid.setViewportAlignment(data.viewportAlignment.value)
         LibretroDroid.setRunAheadFrames(data.runAheadFrames)
+        data.achievements?.let { startAchievements(lifecycleOwner, it) }
+    }
+
+    /** The session starts now; it signs in and loads the game once the core has the game loaded. */
+    private fun startAchievements(lifecycleOwner: LifecycleOwner, config: AchievementsConfig) {
+        val bridge = AchievementsBridge(
+            config.server,
+            onEmulationThread = { queueEvent(it) },
+            onEvent = { achievementsEventsSubject.tryEmit(it) },
+        )
+        LibretroDroid.achievementsStart(bridge, config.hardcore)
+        // rc_client keeps time by frames; while none are run (paused, in the background) it still
+        // has pings and unlock retries to send.
+        lifecycleOwner.lifecycle.coroutineScope.launch {
+            while (isActive) {
+                delay(1000)
+                if (System.nanoTime() - lastFrameAt > 1_000_000_000L) {
+                    queueEvent { LibretroDroid.achievementsIdle() }
+                }
+            }
+        }
     }
 
     @OnLifecycleEvent(Lifecycle.Event.ON_DESTROY)
@@ -217,6 +244,38 @@ class GLRetroView(
 
     fun getRumbleEvents(): Flow<RumbleEvent> {
         return rumbleEventsSubject
+    }
+
+    /** What RetroAchievements reports while the game is played (see [AchievementsEvent]). */
+    fun getAchievementsEvents(): Flow<AchievementsEvent> {
+        return achievementsEventsSubject
+    }
+
+    /**
+     * The game's achievements as JSON: `{game, summary, hardcore, buckets: [{label, type,
+     * achievements: [...]}]}`, grouped by [grouping] ([ACHIEVEMENTS_BY_LOCK_STATE] or
+     * [ACHIEVEMENTS_BY_PROGRESS]).
+     */
+    fun getAchievementList(grouping: Int = ACHIEVEMENTS_BY_LOCK_STATE): String {
+        return runOnEmulationThread(true) { LibretroDroid.achievementsList(grouping).decodeToString() }
+    }
+
+    /** Turning hardcore on with a game running restarts it (RetroAchievements' rule). */
+    fun setAchievementsHardcore(enabled: Boolean) {
+        queueEvent { LibretroDroid.achievementsSetHardcore(enabled) }
+    }
+
+    /**
+     * Whether hardcore rules apply now. While they do, the engine itself ignores fast-forward and
+     * cheats, and loading a state turns hardcore off; the app should not offer them.
+     */
+    fun isAchievementsHardcoreActive(): Boolean {
+        return runOnEmulationThread(true) { LibretroDroid.achievementsIsHardcoreActive() }
+    }
+
+    /** Frames to play before hardcore allows a pause; 0 if one is allowed now. */
+    fun getAchievementsFramesUntilPause(): Int {
+        return runOnEmulationThread(true) { LibretroDroid.achievementsFramesUntilPause() }
     }
 
     fun getControllers(): Array<Array<Controller>> {
@@ -329,6 +388,7 @@ class GLRetroView(
     inner class Renderer : GLSurfaceView.Renderer {
         override fun onDrawFrame(gl: GL10) = catchExceptions {
             if (isEmulationReady) {
+                lastFrameAt = System.nanoTime()
                 LibretroDroid.step(this@GLRetroView)
                 lifecycle?.coroutineScope?.launch {
                     retroGLEventsSubject.emit(GLRetroEvents.FrameRendered)
@@ -365,6 +425,13 @@ class GLRetroView(
         }
         LibretroDroid.onSurfaceCreated()
         isGameLoaded = true
+
+        // The game is hashed from what the core was given, so it waits for the game to load. The
+        // load waits in turn for the sign-in to finish.
+        data.achievements?.let {
+            LibretroDroid.achievementsLogin(it.username, it.token)
+            LibretroDroid.achievementsLoadGame(it.consoleId)
+        }
 
         KtUtils.runOnUIThread {
             lifecycle?.addObserver(RenderLifecycleObserver())
@@ -530,5 +597,13 @@ class GLRetroView(
         const val ERROR_GENERIC = LibretroDroid.ERROR_GENERIC
 
         private val TOUCH_EVENT_OUTSIDE = PointF(-10f, 10f)
+
+        /** For [getAchievementList]: locked, unlocked, unsupported. */
+        const val ACHIEVEMENTS_BY_LOCK_STATE = 0
+        /** For [getAchievementList]: active challenges, recently unlocked, almost there, locked, unlocked. */
+        const val ACHIEVEMENTS_BY_PROGRESS = 1
+
+        /** rcheevos' part of the User-Agent ("rcheevos/12.5"), to follow the app's own. */
+        fun achievementsUserAgentClause(): String = LibretroDroid.achievementsUserAgentClause()
     }
 }
