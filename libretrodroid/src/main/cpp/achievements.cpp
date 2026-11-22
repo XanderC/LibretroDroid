@@ -534,8 +534,10 @@ void Achievements::onLoginResult(int result, const char* errorMessage, rc_client
 void Achievements::onLoadResult(int result, const char* errorMessage, rc_client_t* client, void*) {
     Achievements& self = getInstance();
     const rc_client_game_t* game = rc_client_get_game_info(client);
-    // A game RetroAchievements doesn't know loads as a placeholder with id 0: no rules apply to it.
-    self.gameInSession = result == RC_OK && game != nullptr && game->id != 0;
+    // A game RetroAchievements doesn't know loads as a placeholder with id 0, and a version it knows but doesn't support as
+    // one with nothing in it: no rules apply to either, as there is nothing to earn.
+    self.gameInSession = result == RC_OK && game != nullptr && game->id != 0
+        && (rc_client_has_achievements(client) || rc_client_has_leaderboards(client));
     if (game != nullptr) {
         LOGI("[rcheevos] load finished (%d): game %u \"%s\", hash %s",
              result, game->id, game->title ? game->title : "", game->hash ? game->hash : "");
