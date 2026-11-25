@@ -27,7 +27,9 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <unordered_map>
 
 // VFS API v4, newer than the bundled libretro.h: stat with a 64-bit size, for discs over 2 GB.
 typedef int (RETRO_CALLCONV *retro_vfs_stat_64_t)(const char *path, int64_t *size);
@@ -63,6 +65,13 @@ public:
 private:
     VFS() {}
 
+    struct VirtualHandle {
+        int fd;
+        int64_t pos;
+        int64_t size;
+        std::string path;
+    };
+
     struct retro_vfs_file_handle* virtualOpen(const char *path, unsigned mode, unsigned hints);
 
     VFSFile* findVirtualFile(const char* path);
@@ -94,6 +103,8 @@ public:
 
 private:
     std::vector<VFSFile> virtualFiles;
+    std::mutex handlesMutex;
+    std::unordered_map<struct retro_vfs_file_handle*, VirtualHandle> virtualHandles;
 
 };
 
